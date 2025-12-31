@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Tutors API</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .result { background: #f5f5f5; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .error { background: #ffebee; color: #c62828; }
+        .success { background: #e8f5e9; color: #2e7d32; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Test Tutors API</h1>
+    
+    <button onclick="testTutorsAPI()">Test Get All Tutors</button>
+    <button onclick="testWithLocalhost()">Test with Localhost</button>
+    <button onclick="testWithIP()">Test with IP Address</button>
+    
+    <div id="results"></div>
+
+    <script>
+        const resultsDiv = document.getElementById('results');
+        
+        function addResult(title, content, isError = false) {
+            const div = document.createElement('div');
+            div.className = `result ${isError ? 'error' : 'success'}`;
+            div.innerHTML = `<h3>${title}</h3><pre>${content}</pre>`;
+            resultsDiv.appendChild(div);
+        }
+        
+        async function testAPI(baseUrl) {
+            try {
+                const response = await fetch(`${baseUrl}/api/v1/tutors`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    addResult(`✅ Success - ${baseUrl}`, JSON.stringify(data, null, 2));
+                    
+                    if (data.data && data.data.tutors) {
+                        addResult(`📊 Tutors Found`, `Total: ${data.data.tutors.length} tutors`);
+                    }
+                } else {
+                    addResult(`❌ Error - ${baseUrl}`, JSON.stringify(data, null, 2), true);
+                }
+            } catch (error) {
+                addResult(`❌ Network Error - ${baseUrl}`, error.message, true);
+            }
+        }
+        
+        function testTutorsAPI() {
+            resultsDiv.innerHTML = '';
+            // Try to detect current host
+            const currentHost = window.location.hostname;
+            const port = '5000'; // Backend port
+            
+            if (currentHost === 'localhost' || currentHost === '127.0.0.1') {
+                testAPI('http://localhost:5000');
+            } else {
+                testAPI(`http://${currentHost}:5000`);
+            }
+        }
+        
+        function testWithLocalhost() {
+            resultsDiv.innerHTML = '';
+            testAPI('http://localhost:5000');
+        }
+        
+        function testWithIP() {
+            resultsDiv.innerHTML = '';
+            // Get current IP from URL
+            const currentHost = window.location.hostname;
+            testAPI(`http://${currentHost}:5000`);
+        }
+    </script>
+</body>
+</html>

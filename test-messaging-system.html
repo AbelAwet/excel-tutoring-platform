@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Messaging System</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
+        .section { margin-bottom: 30px; padding: 20px; border: 1px solid #ddd; border-radius: 8px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, textarea, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
+        button { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px; }
+        button:hover { background: #0056b3; }
+        .result { margin-top: 20px; padding: 10px; border-radius: 4px; }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .conversation { background: #f8f9fa; padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .message { background: white; padding: 8px; margin: 5px 0; border-left: 3px solid #007bff; }
+    </style>
+</head>
+<body>
+    <h1>Test Student-Tutor Messaging System</h1>
+    
+    <!-- Login Section -->
+    <div class="section">
+        <h2>1. Login</h2>
+        <div class="form-group">
+            <label for="email">Email:</label>
+            <input type="email" id="email" value="abel.awet22@gmail.com" placeholder="Enter email">
+        </div>
+        <div class="form-group">
+            <label for="password">Password:</label>
+            <input type="password" id="password" value="password123" placeholder="Enter password">
+        </div>
+        <button onclick="login()">Login</button>
+        <div id="loginResult"></div>
+    </div>
+
+    <!-- Get Tutors Section -->
+    <div class="section">
+        <h2>2. Get Available Tutors</h2>
+        <button onclick="getTutors()">Get Tutors</button>
+        <div id="tutorsResult"></div>
+    </div>
+
+    <!-- Create Conversation Section -->
+    <div class="section">
+        <h2>3. Create Conversation</h2>
+        <div class="form-group">
+            <label for="tutorSelect">Select Tutor:</label>
+            <select id="tutorSelect">
+                <option value="">Select a tutor...</option>
+            </select>
+        </div>
+        <button onclick="createConversation()">Create Conversation</button>
+        <div id="conversationResult"></div>
+    </div>
+
+    <!-- Send Message Section -->
+    <div class="section">
+        <h2>4. Send Message</h2>
+        <div class="form-group">
+            <label for="messageContent">Message:</label>
+            <textarea id="messageContent" rows="3" placeholder="Enter your message...">Hi! I'm interested in your tutoring services. When are you available?</textarea>
+        </div>
+        <button onclick="sendMessage()">Send Message</button>
+        <div id="messageResult"></div>
+    </div>
+
+    <!-- Get Conversations Section -->
+    <div class="section">
+        <h2>5. Get Conversations</h2>
+        <button onclick="getConversations()">Get My Conversations</button>
+        <div id="conversationsResult"></div>
+    </div>
+
+    <!-- Get Messages Section -->
+    <div class="section">
+        <h2>6. Get Messages</h2>
+        <div class="form-group">
+            <label for="conversationSelect">Select Conversation:</label>
+            <select id="conversationSelect">
+                <option value="">Select a conversation...</option>
+            </select>
+        </div>
+        <button onclick="getMessages()">Get Messages</button>
+        <div id="messagesResult"></div>
+    </div>
+
+    <script>
+        let authToken = '';
+        let currentTutorId = '';
+        let conversations = [];
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const resultDiv = document.getElementById('loginResult');
+            
+            try {
+                resultDiv.innerHTML = '<div class="info">Logging in...</div>';
+                
+                const response = await fetch('http://localhost:5000/api/v1/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    authToken = data.data.accessToken;
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            <strong>Login Successful!</strong><br>
+                            User: ${data.data.user.firstName} ${data.data.user.lastName}<br>
+                            Role: ${data.data.user.role}<br>
+                            Token: ${authToken.substring(0, 20)}...
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<div class="error"><strong>Error:</strong> ${data.message}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error"><strong>Network Error:</strong> ${error.message}</div>`;
+            }
+        }
+
+        async function getTutors() {
+            const resultDiv = document.getElementById('tutorsResult');
+            
+            if (!authToken) {
+                resultDiv.innerHTML = '<div class="error">Please login first</div>';
+                return;
+            }
+            
+            try {
+                resultDiv.innerHTML = '<div class="info">Loading tutors...</div>';
+                
+                const response = await fetch('http://localhost:5000/api/v1/tutors', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    const tutors = data.data.tutors || [];
+                    const tutorSelect = document.getElementById('tutorSelect');
+                    tutorSelect.innerHTML = '<option value="">Select a tutor...</option>';
+                    
+                    let tutorsHtml = `<div class="success"><strong>Found ${tutors.length} tutors:</strong></div>`;
+                    
+                    tutors.forEach(tutor => {
+                        tutorSelect.innerHTML += `<option value="${tutor.user._id}">${tutor.user.firstName} ${tutor.user.lastName}</option>`;
+                        tutorsHtml += `
+                            <div class="conversation">
+                                <strong>${tutor.user.firstName} ${tutor.user.lastName}</strong><br>
+                                ID: ${tutor.user._id}<br>
+                                Email: ${tutor.user.email}<br>
+                                Available: ${tutor.isAvailable ? 'Yes' : 'No'}
+                            </div>
+                        `;
+                    });
+                    
+                    resultDiv.innerHTML = tutorsHtml;
+                } else {
+                    resultDiv.innerHTML = `<div class="error"><strong>Error:</strong> ${data.message}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error"><strong>Network Error:</strong> ${error.message}</div>`;
+            }
+        }
+
+        async function createConversation() {
+            const tutorId = document.getElementById('tutorSelect').value;
+            const resultDiv = document.getElementById('conversationResult');
+            
+            if (!authToken) {
+                resultDiv.innerHTML = '<div class="error">Please login first</div>';
+                return;
+            }
+            
+            if (!tutorId) {
+                resultDiv.innerHTML = '<div class="error">Please select a tutor</div>';
+                return;
+            }
+            
+            try {
+                resultDiv.innerHTML = '<div class="info">Creating conversation...</div>';
+                
+                const response = await fetch('http://localhost:5000/api/v1/messages/conversations', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`,
+                    },
+                    body: JSON.stringify({ participantId: tutorId })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentTutorId = tutorId;
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            <strong>Conversation Created!</strong><br>
+                            Conversation ID: ${data.data.conversation._id}<br>
+                            Other User: ${data.data.conversation.otherUser.firstName} ${data.data.conversation.otherUser.lastName}
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<div class="error"><strong>Error:</strong> ${data.message}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error"><strong>Network Error:</strong> ${error.message}</div>`;
+            }
+        }
+
+        async function sendMessage() {
+            const content = document.getElementById('messageContent').value;
+            const resultDiv = document.getElementById('messageResult');
+            
+            if (!authToken) {
+                resultDiv.innerHTML = '<div class="error">Please login first</div>';
+                return;
+            }
+            
+            if (!currentTutorId) {
+                resultDiv.innerHTML = '<div class="error">Please create a conversation first</div>';
+                return;
+            }
+            
+            if (!content.trim()) {
+                resultDiv.innerHTML = '<div class="error">Please enter a message</div>';
+                return;
+            }
+            
+            try {
+                resultDiv.innerHTML = '<div class="info">Sending message...</div>';
+                
+                const response = await fetch('http://localhost:5000/api/v1/messages', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`,
+                    },
+                    body: JSON.stringify({ 
+                        receiverId: currentTutorId,
+                        content: content.trim()
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            <strong>Message Sent!</strong><br>
+                            To: ${data.data.message.receiver.firstName} ${data.data.message.receiver.lastName}<br>
+                            Content: "${data.data.message.content}"<br>
+                            Time: ${new Date(data.data.message.createdAt).toLocaleString()}
+                        </div>
+                    `;
+                    document.getElementById('messageContent').value = '';
+                } else {
+                    resultDiv.innerHTML = `<div class="error"><strong>Error:</strong> ${data.message}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error"><strong>Network Error:</strong> ${error.message}</div>`;
+            }
+        }
+
+        async function getConversations() {
+            const resultDiv = document.getElementById('conversationsResult');
+            
+            if (!authToken) {
+                resultDiv.innerHTML = '<div class="error">Please login first</div>';
+                return;
+            }
+            
+            try {
+                resultDiv.innerHTML = '<div class="info">Loading conversations...</div>';
+                
+                const response = await fetch('http://localhost:5000/api/v1/messages/conversations', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    conversations = data.data.conversations || [];
+                    const conversationSelect = document.getElementById('conversationSelect');
+                    conversationSelect.innerHTML = '<option value="">Select a conversation...</option>';
+                    
+                    let conversationsHtml = `<div class="success"><strong>Found ${conversations.length} conversations:</strong></div>`;
+                    
+                    conversations.forEach(conv => {
+                        conversationSelect.innerHTML += `<option value="${conv.otherUser._id}">${conv.otherUser.firstName} ${conv.otherUser.lastName}</option>`;
+                        conversationsHtml += `
+                            <div class="conversation">
+                                <strong>${conv.otherUser.firstName} ${conv.otherUser.lastName}</strong><br>
+                                Last Message: "${conv.lastMessage?.content || 'No messages'}"<br>
+                                Unread: ${conv.unreadCount || 0}
+                            </div>
+                        `;
+                    });
+                    
+                    resultDiv.innerHTML = conversationsHtml;
+                } else {
+                    resultDiv.innerHTML = `<div class="error"><strong>Error:</strong> ${data.message}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error"><strong>Network Error:</strong> ${error.message}</div>`;
+            }
+        }
+
+        async function getMessages() {
+            const userId = document.getElementById('conversationSelect').value;
+            const resultDiv = document.getElementById('messagesResult');
+            
+            if (!authToken) {
+                resultDiv.innerHTML = '<div class="error">Please login first</div>';
+                return;
+            }
+            
+            if (!userId) {
+                resultDiv.innerHTML = '<div class="error">Please select a conversation</div>';
+                return;
+            }
+            
+            try {
+                resultDiv.innerHTML = '<div class="info">Loading messages...</div>';
+                
+                const response = await fetch(`http://localhost:5000/api/v1/messages/${userId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    const messages = data.data.messages || [];
+                    
+                    let messagesHtml = `<div class="success"><strong>Found ${messages.length} messages:</strong></div>`;
+                    
+                    messages.forEach(msg => {
+                        messagesHtml += `
+                            <div class="message">
+                                <strong>${msg.sender.firstName} ${msg.sender.lastName}:</strong> "${msg.content}"<br>
+                                <small>${new Date(msg.createdAt).toLocaleString()}</small>
+                            </div>
+                        `;
+                    });
+                    
+                    resultDiv.innerHTML = messagesHtml;
+                } else {
+                    resultDiv.innerHTML = `<div class="error"><strong>Error:</strong> ${data.message}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error"><strong>Network Error:</strong> ${error.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>
