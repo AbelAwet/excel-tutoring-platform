@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: excel-tutoring-api
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
