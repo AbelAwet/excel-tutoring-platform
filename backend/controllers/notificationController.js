@@ -10,9 +10,7 @@ export const getNotifications = async (req, res) => {
     const skip = (page - 1) * limit;
 
     const query = { recipient: req.user._id };
-    if (isRead !== undefined) {
-      query.isRead = isRead === 'true';
-    }
+    if (isRead !== undefined) query.isRead = isRead === 'true';
 
     const notifications = await Notification.find(query)
       .populate('sender', 'firstName lastName avatar')
@@ -21,29 +19,18 @@ export const getNotifications = async (req, res) => {
       .limit(parseInt(limit));
 
     const total = await Notification.countDocuments(query);
-    const unreadCount = await Notification.countDocuments({
-      recipient: req.user._id,
-      isRead: false
-    });
+    const unreadCount = await Notification.countDocuments({ recipient: req.user._id, isRead: false });
 
     res.status(200).json({
       success: true,
       data: {
         notifications,
         unreadCount,
-        pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
-          total,
-          pages: Math.ceil(total / limit)
-        }
+        pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / limit) }
       }
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to get notifications'
-    });
+    res.status(500).json({ success: false, message: error.message || 'Failed to get notifications' });
   }
 };
 
@@ -53,34 +40,15 @@ export const getNotifications = async (req, res) => {
 export const markAsRead = async (req, res) => {
   try {
     const notification = await Notification.findById(req.params.id);
+    if (!notification) return res.status(404).json({ success: false, message: 'Notification not found' });
 
-    if (!notification) {
-      return res.status(404).json({
-        success: false,
-        message: 'Notification not found'
-      });
-    }
-
-    // Check if notification belongs to user
-    if (notification.recipient.toString() !== req.user._id.toString()) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized'
-      });
-    }
+    if (notification.recipient.toString() !== req.user._id.toString())
+      return res.status(403).json({ success: false, message: 'Not authorized' });
 
     await notification.markAsRead();
-
-    res.status(200).json({
-      success: true,
-      message: 'Notification marked as read',
-      data: { notification }
-    });
+    res.status(200).json({ success: true, message: 'Notification marked as read', data: { notification } });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to mark notification as read'
-    });
+    res.status(500).json({ success: false, message: error.message || 'Failed to mark notification as read' });
   }
 };
 
@@ -90,16 +58,9 @@ export const markAsRead = async (req, res) => {
 export const markAllNotificationsAsRead = async (req, res) => {
   try {
     await markAllAsRead(req.user._id);
-
-    res.status(200).json({
-      success: true,
-      message: 'All notifications marked as read'
-    });
+    res.status(200).json({ success: true, message: 'All notifications marked as read' });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to mark all notifications as read'
-    });
+    res.status(500).json({ success: false, message: error.message || 'Failed to mark all notifications as read' });
   }
 };
 
@@ -109,33 +70,15 @@ export const markAllNotificationsAsRead = async (req, res) => {
 export const deleteNotification = async (req, res) => {
   try {
     const notification = await Notification.findById(req.params.id);
+    if (!notification) return res.status(404).json({ success: false, message: 'Notification not found' });
 
-    if (!notification) {
-      return res.status(404).json({
-        success: false,
-        message: 'Notification not found'
-      });
-    }
+    if (notification.recipient.toString() !== req.user._id.toString())
+      return res.status(403).json({ success: false, message: 'Not authorized' });
 
-    // Check if notification belongs to user
-    if (notification.recipient.toString() !== req.user._id.toString()) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized'
-      });
-    }
-
-    await notification.remove();
-
-    res.status(200).json({
-      success: true,
-      message: 'Notification deleted successfully'
-    });
+    await notification.deleteOne();
+    res.status(200).json({ success: true, message: 'Notification deleted successfully' });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to delete notification'
-    });
+    res.status(500).json({ success: false, message: error.message || 'Failed to delete notification' });
   }
 };
 
@@ -144,19 +87,9 @@ export const deleteNotification = async (req, res) => {
 // @access  Private
 export const getUnreadCount = async (req, res) => {
   try {
-    const count = await Notification.countDocuments({
-      recipient: req.user._id,
-      isRead: false
-    });
-
-    res.status(200).json({
-      success: true,
-      data: { count }
-    });
+    const count = await Notification.countDocuments({ recipient: req.user._id, isRead: false });
+    res.status(200).json({ success: true, data: { count } });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to get unread count'
-    });
+    res.status(500).json({ success: false, message: error.message || 'Failed to get unread count' });
   }
 };

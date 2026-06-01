@@ -22,12 +22,12 @@ const paymentSchema = new mongoose.Schema({
   },
   paymentMethod: {
     type: String,
-    enum: ['telebirr', 'wallet', 'cash'],
-    default: 'telebirr'
+    enum: ['bank_transfer', 'cash', 'other'],
+    default: 'bank_transfer'
   },
   status: {
     type: String,
-    enum: ['pending', 'processing', 'completed', 'failed', 'refunded', 'cancelled'],
+    enum: ['pending', 'under_review', 'completed', 'failed', 'refunded', 'cancelled'],
     default: 'pending'
   },
   transactionId: {
@@ -35,21 +35,39 @@ const paymentSchema = new mongoose.Schema({
     unique: true,
     sparse: true
   },
-  telebirrTransactionId: String,
-  telebirrOrderId: String,
-  telebirrResponse: mongoose.Schema.Types.Mixed,
-  paymentGatewayResponse: mongoose.Schema.Types.Mixed,
+  // Student-submitted proof of payment
+  proofOfPayment: {
+    url: String,
+    publicId: String,
+    uploadedAt: Date
+  },
+  // Reference number student provides (bank ref, etc.)
+  referenceNumber: {
+    type: String,
+    trim: true
+  },
+  // Admin review fields
+  reviewedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  reviewedAt: Date,
+  adminNotes: String,
+  // Refund fields
   refundAmount: {
     type: Number,
     default: 0
   },
   refundReason: String,
   refundedAt: Date,
+  refundedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
   failureReason: String,
   metadata: {
     ipAddress: String,
-    userAgent: String,
-    deviceInfo: String
+    userAgent: String
   },
   completedAt: Date,
   expiresAt: Date
@@ -58,16 +76,15 @@ const paymentSchema = new mongoose.Schema({
 });
 
 // Generate unique transaction ID
-paymentSchema.pre('save', function(next) {
+paymentSchema.pre('save', function (next) {
   if (this.isNew && !this.transactionId) {
-    this.transactionId = `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+    this.transactionId = `TXN-${Date.now()}-${Math.random().toString(36).substring(2, 11).toUpperCase()}`;
   }
   next();
 });
 
-// Indexes
+// Indexes — transactionId unique index is already created by unique:true in schema field
 paymentSchema.index({ user: 1, createdAt: -1 });
-paymentSchema.index({ transactionId: 1 });
 paymentSchema.index({ status: 1 });
 paymentSchema.index({ booking: 1 });
 

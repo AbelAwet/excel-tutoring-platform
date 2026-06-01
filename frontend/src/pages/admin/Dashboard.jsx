@@ -86,9 +86,9 @@ const AdminDashboard = () => {
           color="blue"
         />
         <StatCard
-          title="Pending Tutors"
-          value={statsData.users?.pendingTutors || 0}
-          icon={FiUserCheck}
+          title="Pending Payments"
+          value={statsData.pendingPayments || 0}
+          icon={FiAlertCircle}
           color="yellow"
         />
       </div>

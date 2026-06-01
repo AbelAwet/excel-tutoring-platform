@@ -11,7 +11,7 @@ export const register = async (req, res) => {
   try {
     const { firstName, lastName, email, password, phone, role } = req.body;
 
-    console.log('Registration attempt:', { firstName, lastName, email, phone, role });
+    // registration attempt logged
 
     // Check if user exists
     const userExists = await User.findOne({ email });
@@ -28,20 +28,17 @@ export const register = async (req, res) => {
       lastName,
       email,
       password,
-      phone: phone || undefined, // Don't save empty string
+      phone: phone || undefined,
       role: role || 'student'
     });
 
-    // Generate OTP
+    // Generate OTP and send verification email
     const otp = user.generateOTP();
     await user.save();
-
-    // Send OTP email
     try {
       await sendOTPEmail(email, otp, firstName);
-    } catch (emailError) {
-      console.error('Failed to send OTP email:', emailError);
-      // Don't fail registration if email fails
+    } catch {
+      // Non-fatal — registration succeeds even if OTP email fails
     }
 
     // If registering as tutor, automatically create tutor profile
@@ -67,8 +64,8 @@ export const register = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: role === 'tutor' 
-        ? 'Registration successful! You are now listed as a tutor.' 
+      message: role === 'tutor'
+        ? 'Registration successful! You are now listed as a tutor.'
         : 'Registration successful. Please verify your email with the OTP sent.',
       data: {
         user: user.getPublicProfile(),
@@ -77,9 +74,6 @@ export const register = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Registration error:', error);
-    
-    // Handle validation errors specifically
     if (error.name === 'ValidationError') {
       const validationErrors = Object.values(error.errors).map(err => err.message);
       return res.status(400).json({
@@ -219,7 +213,7 @@ export const verifyEmail = async (req, res) => {
     try {
       await sendWelcomeEmail(user.email, user.firstName);
     } catch (emailError) {
-      console.error('Failed to send welcome email:', emailError);
+      // Non-fatal — welcome email failure doesn't affect verification
     }
 
     res.status(200).json({
@@ -262,13 +256,14 @@ export const resendOTP = async (req, res) => {
     const otp = user.generateOTP();
     await user.save();
 
-    // Send OTP email
-    await sendOTPEmail(user.email, otp, user.firstName);
+    // Send OTP email — non-fatal if email service is not configured
+    try {
+      await sendOTPEmail(user.email, otp, user.firstName);
+    } catch (emailError) {
+      // OTP is saved; user can still verify if they have the code
+    }
 
-    res.status(200).json({
-      success: true,
-      message: 'OTP sent successfully'
-    });
+    res.status(200).json({ success: true, message: 'OTP sent successfully' });
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -300,18 +295,10 @@ export const forgotPassword = async (req, res) => {
 
     await user.save();
 
-    // Create reset URL with both localhost and network IP options
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
-    
-    // Also create mobile-friendly URL
-    const mobileUrl = process.env.MOBILE_FRONTEND_URL 
+    const mobileUrl = process.env.MOBILE_FRONTEND_URL
       ? `${process.env.MOBILE_FRONTEND_URL}/reset-password/${resetToken}`
       : resetUrl;
-    
-    console.log('=== RESET URL GENERATION ===');
-    console.log('PC Reset URL:', resetUrl);
-    console.log('Mobile Reset URL:', mobileUrl);
-    console.log('============================');
 
     try {
       await sendPasswordResetEmail(user.email, resetToken, user.firstName, resetUrl, mobileUrl);
@@ -319,18 +306,16 @@ export const forgotPassword = async (req, res) => {
       res.status(200).json({
         success: true,
         message: 'Password reset email sent',
-        resetToken: process.env.NODE_ENV === 'development' ? resetToken : undefined
+        // Only expose token in development for easier testing
+        ...(process.env.NODE_ENV === 'development' && { resetToken })
       });
     } catch (error) {
-      console.log('Email sending failed, but token is saved. Error:', error.message);
-      
-      // In development, still return success with the token so users can reset password
       if (process.env.NODE_ENV === 'development') {
         return res.status(200).json({
           success: true,
           message: 'Password reset token generated (email service not configured)',
-          resetToken: resetToken,
-          resetUrl: resetUrl,
+          resetToken,
+          resetUrl,
           note: 'Email service not configured. Use the resetUrl above to reset your password.'
         });
       }
@@ -358,36 +343,19 @@ export const forgotPassword = async (req, res) => {
 // @access  Public
 export const resetPassword = async (req, res) => {
   try {
-    console.log('=== PASSWORD RESET REQUEST ===');
-    console.log('Token from URL:', req.params.resettoken);
-    console.log('Password provided:', !!req.body.password);
-    
     // Get hashed token
     const resetPasswordToken = crypto
       .createHash('sha256')
       .update(req.params.resettoken)
       .digest('hex');
 
-    console.log('Hashed token:', resetPasswordToken);
-
     const user = await User.findOne({
       passwordResetToken: resetPasswordToken,
       passwordResetExpire: { $gt: Date.now() }
     });
 
-    console.log('User found:', !!user);
-    if (user) {
-      console.log('User email:', user.email);
-      console.log('Token expiry:', new Date(user.passwordResetExpire));
-      console.log('Current time:', new Date());
-    }
-
     if (!user) {
-      console.log('No user found or token expired');
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid or expired token'
-      });
+      return res.status(400).json({ success: false, message: 'Invalid or expired token' });
     }
 
     // Set new password
@@ -396,18 +364,10 @@ export const resetPassword = async (req, res) => {
     user.passwordResetExpire = undefined;
 
     await user.save();
-    console.log('Password reset successful for:', user.email);
 
-    res.status(200).json({
-      success: true,
-      message: 'Password reset successful'
-    });
+    res.status(200).json({ success: true, message: 'Password reset successful' });
   } catch (error) {
-    console.error('Password reset error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Password reset failed'
-    });
+    res.status(500).json({ success: false, message: error.message || 'Password reset failed' });
   }
 };
 
@@ -481,17 +441,11 @@ export const logout = async (req, res) => {
 export const getMe = async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
-
-    res.status(200).json({
-      success: true,
-      data: {
-        user: user.getPublicProfile()
-      }
-    });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    res.status(200).json({ success: true, data: { user: user.getPublicProfile() } });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to get user data'
-    });
+    res.status(500).json({ success: false, message: error.message || 'Failed to get user data' });
   }
 };

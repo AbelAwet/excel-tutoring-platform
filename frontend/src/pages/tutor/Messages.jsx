@@ -49,14 +49,10 @@ const TutorMessages = () => {
         content: newMessage.trim()
       });
       setNewMessage('');
-      
-      // Refetch messages and conversations
       queryClient.invalidateQueries(['messages', selectedConversation.otherUser._id]);
       queryClient.invalidateQueries(['conversations']);
-      
       toast.success('Message sent successfully');
-    } catch (error) {
-      console.error('Failed to send message:', error);
+    } catch {
       toast.error('Failed to send message');
     }
   };
@@ -101,7 +97,6 @@ const TutorMessages = () => {
               </h2>
               <button
                 onClick={() => {
-                  console.log('Manual refresh clicked');
                   refetchConversations();
                   toast.success('Refreshing conversations...');
                 }}

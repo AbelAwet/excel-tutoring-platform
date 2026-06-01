@@ -1,13 +1,16 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { FiBell, FiCheck, FiTrash2, FiFilter, FiRefreshCw, FiUsers } from 'react-icons/fi';
+import { useMutation } from '@tanstack/react-query';
+import { FiBell, FiCheck, FiTrash2, FiFilter, FiRefreshCw, FiSend } from 'react-icons/fi';
 import { useNotifications, useMarkAsRead, useMarkAllAsRead, useDeleteNotification } from '../../hooks/useNotifications';
+import { adminService } from '../../services/adminService';
 import { formatDistanceToNow } from 'date-fns';
 import toast from 'react-hot-toast';
 
 const AdminNotifications = () => {
-  const [filter, setFilter] = useState('all'); // all, unread, read
+  const [filter, setFilter] = useState('all');
   const [page, setPage] = useState(1);
+  const [showAnnouncement, setShowAnnouncement] = useState(false);
+  const [announcement, setAnnouncement] = useState({ title: '', message: '', targetRole: 'all' });
   
   const { data: notificationsData, isLoading, refetch } = useNotifications({
     page,
@@ -18,6 +21,15 @@ const AdminNotifications = () => {
   const markAsReadMutation = useMarkAsRead();
   const markAllAsReadMutation = useMarkAllAsRead();
   const deleteNotificationMutation = useDeleteNotification();
+
+  const sendAnnouncement = useMutation({
+    mutationFn: (data) => adminService.sendAnnouncement(data),
+    onSuccess: () => {
+      toast.success('Announcement sent successfully');
+      setShowAnnouncement(false);
+      setAnnouncement({ title: '', message: '', targetRole: 'all' });
+    }
+  });
 
   const notifications = notificationsData?.data?.notifications || [];
   const pagination = notificationsData?.data?.pagination || {};
@@ -94,6 +106,13 @@ const AdminNotifications = () => {
           </p>
         </div>
         <div className="flex items-center space-x-3">
+          <button
+            onClick={() => setShowAnnouncement(true)}
+            className="btn btn-primary inline-flex items-center gap-2"
+          >
+            <FiSend size={16} />
+            Send Announcement
+          </button>
           <button
             onClick={() => refetch()}
             className="btn btn-secondary inline-flex items-center gap-2"
@@ -239,6 +258,61 @@ const AdminNotifications = () => {
           >
             Next
           </button>
+        </div>
+      )}
+
+      {/* Announcement Modal */}
+      {showAnnouncement && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-lg p-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              <FiSend size={18} /> Send System Announcement
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Target Audience</label>
+                <select
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  value={announcement.targetRole}
+                  onChange={(e) => setAnnouncement(a => ({ ...a, targetRole: e.target.value }))}
+                >
+                  <option value="all">All Users</option>
+                  <option value="student">Students Only</option>
+                  <option value="tutor">Tutors Only</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Title</label>
+                <input
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="Announcement title..."
+                  value={announcement.title}
+                  onChange={(e) => setAnnouncement(a => ({ ...a, title: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Message</label>
+                <textarea
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  rows={4}
+                  placeholder="Your announcement message..."
+                  value={announcement.message}
+                  onChange={(e) => setAnnouncement(a => ({ ...a, message: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end mt-6">
+              <button onClick={() => setShowAnnouncement(false)} className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">Cancel</button>
+              <button
+                onClick={() => sendAnnouncement.mutate(announcement)}
+                disabled={sendAnnouncement.isPending || !announcement.title || !announcement.message}
+                className="px-4 py-2 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                <FiSend size={14} />
+                {sendAnnouncement.isPending ? 'Sending...' : 'Send'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

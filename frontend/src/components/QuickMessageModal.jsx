@@ -37,8 +37,7 @@ const QuickMessageModal = ({ isOpen, onClose, tutor, onSuccess }) => {
           onSuccess(conversationResponse.data.data.conversation._id);
         }
       }
-    } catch (error) {
-      console.error('Error sending message:', error);
+    } catch {
       toast.error('Failed to send message');
     } finally {
       setIsLoading(false);

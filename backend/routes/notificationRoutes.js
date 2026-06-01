@@ -10,11 +10,13 @@ import { protect } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-// Routes
+// Static routes MUST come before parameterised /:id routes
 router.get('/', protect, getNotifications);
 router.get('/unread/count', protect, getUnreadCount);
-router.put('/:id/read', protect, markAsRead);
 router.put('/read-all', protect, markAllNotificationsAsRead);
+
+// Parameterised routes
+router.put('/:id/read', protect, markAsRead);
 router.delete('/:id', protect, deleteNotification);
 
 export default router;

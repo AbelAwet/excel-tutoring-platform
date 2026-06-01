@@ -25,8 +25,6 @@ const ForgotPassword = () => {
         email: email.toLowerCase().trim() 
       });
       
-      console.log('Forgot password response:', response.data);
-      
       if (response.data.success) {
         setIsEmailSent(true);
         if (response.data.resetUrl) {
@@ -39,7 +37,6 @@ const ForgotPassword = () => {
         toast.error(response.data.message || 'Failed to send reset email');
       }
     } catch (error) {
-      console.error('Forgot password error:', error);
       toast.error(error.response?.data?.message || 'Failed to send reset email');
     } finally {
       setIsLoading(false);

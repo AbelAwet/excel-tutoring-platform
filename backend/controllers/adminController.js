@@ -4,62 +4,50 @@ import Booking from '../models/Booking.js';
 import Payment from '../models/Payment.js';
 import Review from '../models/Review.js';
 import ActivityLog from '../models/ActivityLog.js';
-import { sendTutorVerificationNotification } from '../utils/notificationService.js';
+import Notification from '../models/Notification.js';
+import { sendTutorVerificationNotification, sendSystemAnnouncement } from '../utils/notificationService.js';
 
 // @desc    Get dashboard stats
 // @route   GET /api/v1/admin/stats
 // @access  Private (Admin)
 export const getDashboardStats = async (req, res) => {
   try {
-    // User stats
     const totalUsers = await User.countDocuments();
     const totalStudents = await User.countDocuments({ role: 'student' });
     const totalTutors = await Tutor.countDocuments();
     const pendingTutors = await Tutor.countDocuments({ verificationStatus: 'pending' });
-
-    // Booking stats
     const totalBookings = await Booking.countDocuments();
     const completedBookings = await Booking.countDocuments({ status: 'completed' });
     const pendingBookings = await Booking.countDocuments({ status: 'pending' });
+    const pendingPayments = await Payment.countDocuments({ status: 'under_review' });
 
-    // Payment stats
     const paymentStats = await Payment.aggregate([
       {
         $group: {
           _id: null,
-          totalRevenue: { $sum: '$amount' },
-          completedPayments: {
-            $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] }
-          },
-          failedPayments: {
-            $sum: { $cond: [{ $eq: ['$status', 'failed'] }, 1, 0] }
-          }
+          totalRevenue: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, '$amount', 0] } },
+          completedPayments: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] } },
+          failedPayments: { $sum: { $cond: [{ $eq: ['$status', 'failed'] }, 1, 0] } },
+          pendingPayments: { $sum: { $cond: [{ $eq: ['$status', 'under_review'] }, 1, 0] } }
         }
       }
     ]);
 
-    // Recent activity
     const recentActivity = await ActivityLog.find()
       .populate('user', 'firstName lastName email')
       .sort({ createdAt: -1 })
       .limit(10);
 
-    // Monthly revenue
     const monthlyRevenue = await Payment.aggregate([
       {
         $match: {
           status: 'completed',
-          createdAt: {
-            $gte: new Date(new Date().setMonth(new Date().getMonth() - 6))
-          }
+          createdAt: { $gte: new Date(new Date().setMonth(new Date().getMonth() - 6)) }
         }
       },
       {
         $group: {
-          _id: {
-            year: { $year: '$createdAt' },
-            month: { $month: '$createdAt' }
-          },
+          _id: { year: { $year: '$createdAt' }, month: { $month: '$createdAt' } },
           revenue: { $sum: '$amount' },
           count: { $sum: 1 }
         }
@@ -70,31 +58,16 @@ export const getDashboardStats = async (req, res) => {
     res.status(200).json({
       success: true,
       data: {
-        users: {
-          total: totalUsers,
-          students: totalStudents,
-          tutors: totalTutors,
-          pendingTutors
-        },
-        bookings: {
-          total: totalBookings,
-          completed: completedBookings,
-          pending: pendingBookings
-        },
-        payments: paymentStats[0] || {
-          totalRevenue: 0,
-          completedPayments: 0,
-          failedPayments: 0
-        },
+        users: { total: totalUsers, students: totalStudents, tutors: totalTutors, pendingTutors },
+        bookings: { total: totalBookings, completed: completedBookings, pending: pendingBookings },
+        payments: paymentStats[0] || { totalRevenue: 0, completedPayments: 0, failedPayments: 0, pendingPayments: 0 },
+        pendingPayments,
         monthlyRevenue,
         recentActivity
       }
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to get dashboard stats'
-    });
+    res.status(500).json({ success: false, message: error.message || 'Failed to get dashboard stats' });
   }
 };
 
@@ -117,30 +90,44 @@ export const getAllUsers = async (req, res) => {
       ];
     }
 
-    const users = await User.find(query)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit));
-
+    const users = await User.find(query).sort({ createdAt: -1 }).skip(skip).limit(parseInt(limit));
     const total = await User.countDocuments(query);
 
     res.status(200).json({
       success: true,
-      data: {
-        users,
-        pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
-          total,
-          pages: Math.ceil(total / limit)
-        }
-      }
+      data: { users, pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / limit) } }
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to get users'
+    res.status(500).json({ success: false, message: error.message || 'Failed to get users' });
+  }
+};
+
+// @desc    Get all tutors (with filter)
+// @route   GET /api/v1/admin/tutors
+// @access  Private (Admin)
+export const getAllTutors = async (req, res) => {
+  try {
+    const { verificationStatus, page = 1, limit = 20 } = req.query;
+    const skip = (page - 1) * limit;
+
+    const query = {};
+    if (verificationStatus) query.verificationStatus = verificationStatus;
+
+    const tutors = await Tutor.find(query)
+      .populate('user', 'firstName lastName email avatar phone')
+      .populate('subjects.subject', 'name')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await Tutor.countDocuments(query);
+
+    res.status(200).json({
+      success: true,
+      data: { tutors, pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / limit) } }
     });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message || 'Failed to get tutors' });
   }
 };
 
@@ -154,15 +141,9 @@ export const getPendingTutors = async (req, res) => {
       .populate('subjects.subject', 'name')
       .sort({ createdAt: -1 });
 
-    res.status(200).json({
-      success: true,
-      data: { tutors }
-    });
+    res.status(200).json({ success: true, data: { tutors } });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to get pending tutors'
-    });
+    res.status(500).json({ success: false, message: error.message || 'Failed to get pending tutors' });
   }
 };
 
@@ -173,13 +154,7 @@ export const verifyTutor = async (req, res) => {
   try {
     const { notes } = req.body;
     const tutor = await Tutor.findById(req.params.id).populate('user');
-
-    if (!tutor) {
-      return res.status(404).json({
-        success: false,
-        message: 'Tutor not found'
-      });
-    }
+    if (!tutor) return res.status(404).json({ success: false, message: 'Tutor not found' });
 
     tutor.verificationStatus = 'verified';
     tutor.verifiedAt = new Date();
@@ -187,19 +162,11 @@ export const verifyTutor = async (req, res) => {
     tutor.verificationNotes = notes;
     await tutor.save();
 
-    // Send notification
     await sendTutorVerificationNotification(tutor.user._id, 'verified', notes);
 
-    res.status(200).json({
-      success: true,
-      message: 'Tutor verified successfully',
-      data: { tutor }
-    });
+    res.status(200).json({ success: true, message: 'Tutor verified successfully', data: { tutor } });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to verify tutor'
-    });
+    res.status(500).json({ success: false, message: error.message || 'Failed to verify tutor' });
   }
 };
 
@@ -210,31 +177,17 @@ export const rejectTutor = async (req, res) => {
   try {
     const { notes } = req.body;
     const tutor = await Tutor.findById(req.params.id).populate('user');
-
-    if (!tutor) {
-      return res.status(404).json({
-        success: false,
-        message: 'Tutor not found'
-      });
-    }
+    if (!tutor) return res.status(404).json({ success: false, message: 'Tutor not found' });
 
     tutor.verificationStatus = 'rejected';
     tutor.verificationNotes = notes;
     await tutor.save();
 
-    // Send notification
     await sendTutorVerificationNotification(tutor.user._id, 'rejected', notes);
 
-    res.status(200).json({
-      success: true,
-      message: 'Tutor application rejected',
-      data: { tutor }
-    });
+    res.status(200).json({ success: true, message: 'Tutor application rejected', data: { tutor } });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to reject tutor'
-    });
+    res.status(500).json({ success: false, message: error.message || 'Failed to reject tutor' });
   }
 };
 
@@ -245,28 +198,15 @@ export const suspendUser = async (req, res) => {
   try {
     const { reason } = req.body;
     const user = await User.findById(req.params.id);
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
     user.isSuspended = true;
     user.suspensionReason = reason;
     await user.save();
 
-    res.status(200).json({
-      success: true,
-      message: 'User suspended successfully',
-      data: { user }
-    });
+    res.status(200).json({ success: true, message: 'User suspended successfully', data: { user } });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to suspend user'
-    });
+    res.status(500).json({ success: false, message: error.message || 'Failed to suspend user' });
   }
 };
 
@@ -276,28 +216,35 @@ export const suspendUser = async (req, res) => {
 export const unsuspendUser = async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
     user.isSuspended = false;
     user.suspensionReason = undefined;
     await user.save();
 
-    res.status(200).json({
-      success: true,
-      message: 'User unsuspended successfully',
-      data: { user }
-    });
+    res.status(200).json({ success: true, message: 'User unsuspended successfully', data: { user } });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to unsuspend user'
-    });
+    res.status(500).json({ success: false, message: error.message || 'Failed to unsuspend user' });
+  }
+};
+
+// @desc    Delete user (soft delete with cascade)
+// @route   DELETE /api/v1/admin/users/:id
+// @access  Private (Admin)
+export const deleteUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    // Soft delete — deactivate instead of hard delete to preserve referential integrity
+    user.isActive = false;
+    user.isSuspended = true;
+    user.suspensionReason = 'Account deleted by admin';
+    await user.save();
+
+    res.status(200).json({ success: true, message: 'User deactivated successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message || 'Failed to delete user' });
   }
 };
 
@@ -314,10 +261,7 @@ export const getAllBookings = async (req, res) => {
 
     const bookings = await Booking.find(query)
       .populate('student', 'firstName lastName email')
-      .populate({
-        path: 'tutor',
-        populate: { path: 'user', select: 'firstName lastName email' }
-      })
+      .populate({ path: 'tutor', populate: { path: 'user', select: 'firstName lastName email' } })
       .populate('subject', 'name')
       .populate('payment')
       .sort({ createdAt: -1 })
@@ -328,21 +272,10 @@ export const getAllBookings = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: {
-        bookings,
-        pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
-          total,
-          pages: Math.ceil(total / limit)
-        }
-      }
+      data: { bookings, pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / limit) } }
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to get bookings'
-    });
+    res.status(500).json({ success: false, message: error.message || 'Failed to get bookings' });
   }
 };
 
@@ -360,6 +293,7 @@ export const getAllPayments = async (req, res) => {
     const payments = await Payment.find(query)
       .populate('user', 'firstName lastName email')
       .populate('booking')
+      .populate('reviewedBy', 'firstName lastName')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
@@ -368,21 +302,10 @@ export const getAllPayments = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: {
-        payments,
-        pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
-          total,
-          pages: Math.ceil(total / limit)
-        }
-      }
+      data: { payments, pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / limit) } }
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to get payments'
-    });
+    res.status(500).json({ success: false, message: error.message || 'Failed to get payments' });
   }
 };
 
@@ -393,46 +316,117 @@ export const getReportedReviews = async (req, res) => {
   try {
     const reviews = await Review.find({ isReported: true })
       .populate('student', 'firstName lastName email')
-      .populate({
-        path: 'tutor',
-        populate: { path: 'user', select: 'firstName lastName email' }
-      })
+      .populate({ path: 'tutor', populate: { path: 'user', select: 'firstName lastName email' } })
       .sort({ createdAt: -1 });
 
-    res.status(200).json({
-      success: true,
-      data: { reviews }
-    });
+    res.status(200).json({ success: true, data: { reviews } });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to get reported reviews'
-    });
+    res.status(500).json({ success: false, message: error.message || 'Failed to get reported reviews' });
   }
 };
 
-// @desc    Delete user
-// @route   DELETE /api/v1/admin/users/:id
+// @desc    Admin delete review
+// @route   DELETE /api/v1/admin/reviews/:id
 // @access  Private (Admin)
-export const deleteUser = async (req, res) => {
+export const deleteReview = async (req, res) => {
   try {
-    const user = await User.findByIdAndDelete(req.params.id);
+    const review = await Review.findById(req.params.id);
+    if (!review) return res.status(404).json({ success: false, message: 'Review not found' });
 
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
+    await review.deleteOne();
+    res.status(200).json({ success: true, message: 'Review deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message || 'Failed to delete review' });
+  }
+};
+
+// @desc    Admin unpublish review
+// @route   PUT /api/v1/admin/reviews/:id/unpublish
+// @access  Private (Admin)
+export const unpublishReview = async (req, res) => {
+  try {
+    const review = await Review.findById(req.params.id);
+    if (!review) return res.status(404).json({ success: false, message: 'Review not found' });
+
+    review.isPublished = false;
+    review.isReported = false;
+    await review.save();
+
+    res.status(200).json({ success: true, message: 'Review unpublished successfully', data: { review } });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message || 'Failed to unpublish review' });
+  }
+};
+
+// @desc    Dismiss review report
+// @route   PUT /api/v1/admin/reviews/:id/dismiss-report
+// @access  Private (Admin)
+export const dismissReviewReport = async (req, res) => {
+  try {
+    const review = await Review.findById(req.params.id);
+    if (!review) return res.status(404).json({ success: false, message: 'Review not found' });
+
+    review.isReported = false;
+    review.reportReason = undefined;
+    await review.save();
+
+    res.status(200).json({ success: true, message: 'Report dismissed', data: { review } });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message || 'Failed to dismiss report' });
+  }
+};
+
+// @desc    Send system announcement to all users
+// @route   POST /api/v1/admin/announcements
+// @access  Private (Admin)
+export const sendAnnouncement = async (req, res) => {
+  try {
+    const { title, message, targetRole } = req.body;
+
+    const query = { isActive: true };
+    if (targetRole && targetRole !== 'all') query.role = targetRole;
+
+    const users = await User.find(query).select('_id');
+    const recipientIds = users.map((u) => u._id);
+
+    await sendSystemAnnouncement(recipientIds, title, message);
+
+    // Emit real-time notification
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('system:announcement', { title, message });
     }
 
     res.status(200).json({
       success: true,
-      message: 'User deleted successfully'
+      message: `Announcement sent to ${recipientIds.length} users`
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to delete user'
+    res.status(500).json({ success: false, message: error.message || 'Failed to send announcement' });
+  }
+};
+
+// @desc    Get activity logs
+// @route   GET /api/v1/admin/activity-logs
+// @access  Private (Admin)
+export const getActivityLogs = async (req, res) => {
+  try {
+    const { page = 1, limit = 50 } = req.query;
+    const skip = (page - 1) * limit;
+
+    const logs = await ActivityLog.find()
+      .populate('user', 'firstName lastName email role')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await ActivityLog.countDocuments();
+
+    res.status(200).json({
+      success: true,
+      data: { logs, pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / limit) } }
     });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message || 'Failed to get activity logs' });
   }
 };

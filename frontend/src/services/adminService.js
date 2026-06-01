@@ -1,58 +1,36 @@
 import api from '../lib/axios';
 
 export const adminService = {
-  // Get dashboard stats
-  getDashboardStats: async () => {
-    return await api.get('/admin/stats');
-  },
+  getDashboardStats: () => api.get('/admin/stats'),
+  getActivityLogs: (params) => api.get('/admin/activity-logs', { params }),
 
-  // Get all users
-  getAllUsers: async (params) => {
-    return await api.get('/admin/users', { params });
-  },
+  // Users
+  getAllUsers: (params) => api.get('/admin/users', { params }),
+  suspendUser: (id, reason) => api.put(`/admin/users/${id}/suspend`, { reason }),
+  unsuspendUser: (id) => api.put(`/admin/users/${id}/unsuspend`),
+  deleteUser: (id) => api.delete(`/admin/users/${id}`),
 
-  // Get pending tutors
-  getPendingTutors: async () => {
-    return await api.get('/admin/tutors/pending');
-  },
+  // Tutors
+  getAllTutors: (params) => api.get('/admin/tutors', { params }),
+  getPendingTutors: () => api.get('/admin/tutors/pending'),
+  verifyTutor: (id, notes) => api.put(`/admin/tutors/${id}/verify`, { notes }),
+  rejectTutor: (id, notes) => api.put(`/admin/tutors/${id}/reject`, { notes }),
 
-  // Verify tutor
-  verifyTutor: async (id, notes) => {
-    return await api.put(`/admin/tutors/${id}/verify`, { notes });
-  },
+  // Bookings
+  getAllBookings: (params) => api.get('/admin/bookings', { params }),
 
-  // Reject tutor
-  rejectTutor: async (id, notes) => {
-    return await api.put(`/admin/tutors/${id}/reject`, { notes });
-  },
+  // Payments
+  getAllPayments: (params) => api.get('/admin/payments', { params }),
+  approvePayment: (id, notes) => api.put(`/payments/${id}/approve`, { notes }),
+  rejectPayment: (id, reason) => api.put(`/payments/${id}/reject`, { reason }),
+  processRefund: (id, reason) => api.put(`/payments/${id}/refund`, { reason }),
 
-  // Suspend user
-  suspendUser: async (id, reason) => {
-    return await api.put(`/admin/users/${id}/suspend`, { reason });
-  },
+  // Reviews
+  getReportedReviews: () => api.get('/admin/reviews/reported'),
+  deleteReview: (id) => api.delete(`/admin/reviews/${id}`),
+  unpublishReview: (id) => api.put(`/admin/reviews/${id}/unpublish`),
+  dismissReviewReport: (id) => api.put(`/admin/reviews/${id}/dismiss-report`),
 
-  // Unsuspend user
-  unsuspendUser: async (id) => {
-    return await api.put(`/admin/users/${id}/unsuspend`);
-  },
-
-  // Get all bookings
-  getAllBookings: async (params) => {
-    return await api.get('/admin/bookings', { params });
-  },
-
-  // Get all payments
-  getAllPayments: async (params) => {
-    return await api.get('/admin/payments', { params });
-  },
-
-  // Get reported reviews
-  getReportedReviews: async () => {
-    return await api.get('/admin/reviews/reported');
-  },
-
-  // Delete user
-  deleteUser: async (id) => {
-    return await api.delete(`/admin/users/${id}`);
-  },
+  // Announcements
+  sendAnnouncement: (data) => api.post('/admin/announcements', data),
 };

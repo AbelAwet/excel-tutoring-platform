@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
-  FiCalendar, FiClock, FiUser, FiMapPin, FiDollarSign,
+  FiCalendar, FiClock, FiUser, FiDollarSign,
   FiCheckCircle, FiXCircle, FiAlertCircle, FiEye, FiMessageSquare,
-  FiStar, FiFilter, FiPlus, FiVideo
+  FiStar, FiFilter, FiPlus, FiVideo, FiUpload, FiCreditCard
 } from 'react-icons/fi';
 import { bookingService } from '../../services/bookingService';
+import { paymentService } from '../../services/paymentService';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 
@@ -15,6 +16,9 @@ const StudentBookings = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const queryClient = useQueryClient();
+  const [paymentModal, setPaymentModal] = useState(null); // booking
+  const [paymentForm, setPaymentForm] = useState({ method: 'bank_transfer', reference: '', file: null });
+  const fileRef = useRef();
 
   // Fetch bookings
   const { data: bookingsData, isLoading } = useQuery({
@@ -38,6 +42,20 @@ const StudentBookings = () => {
     },
   });
 
+  // Submit payment mutation
+  const submitPaymentMutation = useMutation({
+    mutationFn: (formData) => paymentService.submitPayment(formData),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['student-bookings']);
+      toast.success('Payment submitted! Awaiting admin approval.');
+      setPaymentModal(null);
+      setPaymentForm({ method: 'bank_transfer', reference: '', file: null });
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || 'Failed to submit payment');
+    },
+  });
+
   const bookings = bookingsData?.data?.bookings || [];
   const pagination = bookingsData?.data?.pagination || {};
 
@@ -56,6 +74,17 @@ const StudentBookings = () => {
     if (window.confirm('Are you sure you want to cancel this booking?')) {
       cancelBookingMutation.mutate(bookingId);
     }
+  };
+
+  const handleSubmitPayment = () => {
+    if (!paymentModal) return;
+    const fd = new FormData();
+    fd.append('bookingId', paymentModal._id);
+    fd.append('amount', paymentModal.totalAmount);
+    fd.append('paymentMethod', paymentForm.method);
+    if (paymentForm.reference) fd.append('referenceNumber', paymentForm.reference);
+    if (paymentForm.file) fd.append('proofOfPayment', paymentForm.file);
+    submitPaymentMutation.mutate(fd);
   };
 
   const canCancelBooking = (booking) => {
@@ -184,7 +213,6 @@ const StudentBookings = () => {
 
                         {booking.sessionType === 'in-person' && booking.location && (
                           <div className="flex items-center text-gray-600 dark:text-gray-400 mt-2 text-sm">
-                            <FiMapPin className="mr-2" size={16} />
                             {booking.location}
                           </div>
                         )}
@@ -210,6 +238,17 @@ const StudentBookings = () => {
                       View
                     </button>
                     
+                    {booking.status === 'pending' && booking.paymentStatus !== 'paid' && (
+                      <button
+                        onClick={() => setPaymentModal(booking)}
+                        className="btn btn-primary btn-sm inline-flex items-center gap-1"
+                        title="Submit Payment"
+                      >
+                        <FiCreditCard size={14} />
+                        Pay
+                      </button>
+                    )}
+
                     {booking.status === 'confirmed' && (
                       <>
                         <button
@@ -281,6 +320,87 @@ const StudentBookings = () => {
           >
             Next
           </button>
+        </div>
+      )}
+
+      {/* Payment Submission Modal */}
+      {paymentModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-lg bg-primary-100 dark:bg-primary-900/30 text-primary-600">
+                <FiCreditCard size={20} />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Submit Payment</h3>
+                <p className="text-sm text-gray-500">Amount: <strong>{paymentModal.totalAmount} ETB</strong></p>
+              </div>
+            </div>
+
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-4 text-sm text-blue-700 dark:text-blue-300">
+              Transfer the amount to the platform's bank account, then submit your proof of payment below. Admin will approve within 24 hours.
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Payment Method</label>
+                <select
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  value={paymentForm.method}
+                  onChange={(e) => setPaymentForm(f => ({ ...f, method: e.target.value }))}
+                >
+                  <option value="bank_transfer">Bank Transfer</option>
+                  <option value="cash">Cash</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Reference Number (optional)</label>
+                <input
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="Bank transaction reference..."
+                  value={paymentForm.reference}
+                  onChange={(e) => setPaymentForm(f => ({ ...f, reference: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Proof of Payment (optional)</label>
+                <div
+                  className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center cursor-pointer hover:border-primary-400 transition-colors"
+                  onClick={() => fileRef.current?.click()}
+                >
+                  <FiUpload className="mx-auto text-gray-400 mb-2" size={20} />
+                  <p className="text-sm text-gray-500">
+                    {paymentForm.file ? paymentForm.file.name : 'Click to upload screenshot or receipt'}
+                  </p>
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept="image/*,application/pdf"
+                    className="hidden"
+                    onChange={(e) => setPaymentForm(f => ({ ...f, file: e.target.files[0] }))}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 justify-end mt-6">
+              <button
+                onClick={() => { setPaymentModal(null); setPaymentForm({ method: 'bank_transfer', reference: '', file: null }); }}
+                className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmitPayment}
+                disabled={submitPaymentMutation.isPending}
+                className="px-4 py-2 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                <FiUpload size={14} />
+                {submitPaymentMutation.isPending ? 'Submitting...' : 'Submit Payment'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

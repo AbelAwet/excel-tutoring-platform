@@ -152,7 +152,7 @@ const MainLayout = () => {
         </div>
       </nav>
 
-      {/* Main Content - No padding for home page */}
+      {/* Main Content — landing page manages its own top spacing via py-32 hero */}
       <div className={isHomePage ? '' : 'pt-24'}>
         <Outlet />
       </div>

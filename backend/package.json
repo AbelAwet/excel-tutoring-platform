@@ -28,7 +28,6 @@
     "nodemailer": "^6.9.7",
     "socket.io": "^4.6.0",
     "axios": "^1.6.2",
-    "crypto": "^1.0.1",
     "cookie-parser": "^1.4.6",
     "compression": "^1.7.4",
     "morgan": "^1.10.0"

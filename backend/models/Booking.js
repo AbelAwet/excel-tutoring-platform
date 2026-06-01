@@ -31,7 +31,7 @@ const bookingSchema = new mongoose.Schema({
   duration: {
     type: Number,
     required: true,
-    min: 1
+    min: [30, 'Duration must be at least 30 minutes']
   },
   pricePerHour: {
     type: Number,
@@ -74,18 +74,19 @@ const bookingSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Validate session date is in the future
-bookingSchema.pre('save', function(next) {
+// Validate session date is in the future (only on new bookings)
+bookingSchema.pre('save', function (next) {
   if (this.isNew && this.sessionDate < new Date()) {
     return next(new Error('Session date must be in the future'));
   }
   next();
 });
 
-// Calculate total amount
-bookingSchema.pre('save', function(next) {
+// Recalculate total amount when duration or price changes
+// duration is stored in MINUTES; pricePerHour is per hour
+bookingSchema.pre('save', function (next) {
   if (this.isModified('duration') || this.isModified('pricePerHour')) {
-    this.totalAmount = (this.duration * this.pricePerHour);
+    this.totalAmount = (this.duration / 60) * this.pricePerHour;
   }
   next();
 });

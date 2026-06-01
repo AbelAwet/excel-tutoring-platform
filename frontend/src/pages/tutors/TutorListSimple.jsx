@@ -52,10 +52,6 @@ const TutorListSimple = () => {
   const tutors = tutorsData?.data?.tutors || [];
 
   const handleSendMessage = async (tutor) => {
-    console.log('Send message clicked for tutor:', tutor);
-    console.log('Is authenticated:', isAuthenticated);
-    console.log('User:', user);
-
     if (!isAuthenticated) {
       toast.error('Please login to send a message');
       navigate('/login');
@@ -68,50 +64,27 @@ const TutorListSimple = () => {
     }
 
     try {
-      console.log('Creating conversation with tutor ID:', tutor.user._id);
       const loadingToast = toast.loading('Creating conversation...');
-      
-      // Create or get existing conversation
       const response = await messageService.createConversation(tutor.user._id);
-      
-      console.log('Conversation response:', response);
-      console.log('Full response data:', JSON.stringify(response.data, null, 2));
-
       toast.dismiss(loadingToast);
 
-      // Check if response has the conversation data
       const conversationData = response.data.data?.conversation || response.data.conversation;
       
       if (conversationData) {
         toast.success('Opening conversation...');
-        
-        const conversationId = conversationData._id;
-        const tutorId = tutor.user._id;
-        const tutorName = `${tutor.user.firstName} ${tutor.user.lastName}`;
-        
-        console.log('Navigation params:', { conversationId, tutorId, tutorName });
-        console.log('About to navigate to /student/messages');
-        
-        // Navigate to messages page with the conversation
         navigate('/student/messages', { 
           state: { 
-            conversationId,
-            tutorId,
-            tutorName,
+            conversationId: conversationData._id,
+            tutorId: tutor.user._id,
+            tutorName: `${tutor.user.firstName} ${tutor.user.lastName}`,
             fromTutorList: true
           }
         });
-        
-        console.log('Navigation called');
       } else {
-        console.error('No conversation data in response:', response.data);
         toast.error('Failed to create conversation');
       }
     } catch (error) {
       toast.dismiss();
-      console.error('Error creating conversation:', error);
-      console.error('Error response:', error.response);
-      console.error('Error details:', error.response?.data);
       toast.error(error.response?.data?.message || 'Failed to start conversation');
     }
   };

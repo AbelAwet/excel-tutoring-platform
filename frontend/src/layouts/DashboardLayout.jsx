@@ -6,7 +6,6 @@ import {
   FiMoon, FiSun
 } from 'react-icons/fi';
 import { useUnreadCount } from '../hooks/useNotifications';
-import AnimatedContainer from '../components/AnimatedContainer';
 import useAuthStore from '../stores/authStore';
 import useThemeStore from '../stores/themeStore';
 import { authService } from '../services/authService';
@@ -27,8 +26,7 @@ const DashboardLayout = () => {
       logout();
       navigate('/login');
       toast.success('Logged out successfully');
-    } catch (error) {
-      console.error('Logout error:', error);
+    } catch {
       logout();
       navigate('/login');
     }
@@ -215,9 +213,7 @@ const DashboardLayout = () => {
 
         {/* Page Content */}
         <main className="p-4 lg:p-8">
-          <AnimatedContainer animation="fade-in-up" duration={0.4}>
-            <Outlet />
-          </AnimatedContainer>
+          <Outlet />
         </main>
       </div>
     </div>

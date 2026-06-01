@@ -188,8 +188,7 @@ tutorSchema.methods.calculateRating = async function() {
   await this.save();
 };
 
-// Indexes
-tutorSchema.index({ user: 1 });
+// user unique index already created by unique:true on the field above
 tutorSchema.index({ 'subjects.subject': 1 });
 tutorSchema.index({ verificationStatus: 1 });
 tutorSchema.index({ 'rating.average': -1 });

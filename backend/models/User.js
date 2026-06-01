@@ -134,8 +134,8 @@ userSchema.methods.getPublicProfile = function() {
   };
 };
 
-// Indexes for performance
-userSchema.index({ email: 1 });
+// email unique index is already created by unique:true on the field above
+// Only add indexes that aren't already implied by schema field options
 userSchema.index({ role: 1 });
 userSchema.index({ isActive: 1 });
 

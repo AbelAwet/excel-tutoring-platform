@@ -21,7 +21,7 @@ const createBookingValidation = [
   body('sessionDate').isISO8601().withMessage('Valid session date is required'),
   body('startTime').notEmpty().withMessage('Start time is required'),
   body('endTime').notEmpty().withMessage('End time is required'),
-  body('duration').isInt({ min: 1 }).withMessage('Duration must be at least 1 hour')
+  body('duration').isInt({ min: 30 }).withMessage('Duration must be at least 30 minutes')
 ];
 
 // Routes

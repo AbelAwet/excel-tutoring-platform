@@ -1,28 +1,12 @@
 import api from '../lib/axios';
 
 export const paymentService = {
-  // Initiate payment
-  initiatePayment: async (data) => {
-    return await api.post('/payments/initiate', data);
-  },
+  // Student: submit payment with optional proof upload
+  submitPayment: (formData) =>
+    api.post('/payments/submit', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }),
 
-  // Verify payment
-  verifyPayment: async (id) => {
-    return await api.get(`/payments/${id}/verify`);
-  },
-
-  // Get user payments
-  getUserPayments: async (params) => {
-    return await api.get('/payments', { params });
-  },
-
-  // Get payment by ID
-  getPaymentById: async (id) => {
-    return await api.get(`/payments/${id}`);
-  },
-
-  // Request refund
-  requestRefund: async (id, reason) => {
-    return await api.post(`/payments/${id}/refund`, { reason });
-  },
+  getUserPayments: (params) => api.get('/payments', { params }),
+  getPaymentById: (id) => api.get(`/payments/${id}`),
 };

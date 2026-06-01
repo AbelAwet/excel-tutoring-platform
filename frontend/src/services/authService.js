@@ -26,9 +26,9 @@ export const authService = {
     return await api.post('/auth/forgot-password', { email });
   },
 
-  // Reset password
+  // Reset password — backend route is PUT
   resetPassword: async (token, password) => {
-    return await api.post(`/auth/reset-password/${token}`, { password });
+    return await api.put(`/auth/reset-password/${token}`, { password });
   },
 
   // Logout

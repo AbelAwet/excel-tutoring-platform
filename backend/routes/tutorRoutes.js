@@ -14,13 +14,13 @@ import { uploadLimiter } from '../middleware/rateLimitMiddleware.js';
 
 const router = express.Router();
 
-// Public routes
+// Static/specific routes MUST come before /:id to avoid being swallowed
 router.get('/', getAllTutors);
-router.get('/:id', getTutorById);
 
-// Protected routes
+// Protected "me" routes — registered before /:id
 router.post('/apply', protect, applyAsTutor);
 router.get('/me/profile', protect, getMyTutorProfile);
+router.get('/me/stats', protect, authorize('tutor'), getTutorStats);
 router.put('/me', protect, authorize('tutor'), updateTutorProfile);
 router.post(
   '/me/documents',
@@ -30,6 +30,8 @@ router.post(
   uploadMultiple('documents', 5),
   uploadVerificationDocuments
 );
-router.get('/me/stats', protect, authorize('tutor'), getTutorStats);
+
+// Parameterised route last
+router.get('/:id', getTutorById);
 
 export default router;

@@ -349,14 +349,14 @@ const TutorBookings = () => {
               </button>
               <button
                 onClick={executeAction}
-                disabled={confirmMutation.isLoading || rejectMutation.isLoading || completeMutation.isLoading}
+                disabled={confirmMutation.isPending || rejectMutation.isPending || completeMutation.isPending}
                 className={`flex-1 px-4 py-2 text-white rounded-lg transition-colors ${
                   actionType === 'confirm' ? 'bg-green-500 hover:bg-green-600' :
                   actionType === 'reject' ? 'bg-red-500 hover:bg-red-600' :
                   'bg-blue-500 hover:bg-blue-600'
                 } disabled:opacity-50`}
               >
-                {confirmMutation.isLoading || rejectMutation.isLoading || completeMutation.isLoading ? 'Processing...' : 
+                {confirmMutation.isPending || rejectMutation.isPending || completeMutation.isPending ? 'Processing...' : 
                  actionType === 'confirm' ? 'Confirm' :
                  actionType === 'reject' ? 'Reject' : 'Complete'}
               </button>

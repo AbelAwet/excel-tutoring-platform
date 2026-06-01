@@ -95,27 +95,22 @@ const VideoCall = ({ roomName, displayName, onClose, bookingId }) => {
 
         // Event listeners
         api.addEventListener('videoConferenceJoined', () => {
-          console.log('User joined the conference');
           setIsLoading(false);
         });
 
         api.addEventListener('videoConferenceLeft', () => {
-          console.log('User left the conference');
           if (onClose) onClose();
         });
 
         api.addEventListener('readyToClose', () => {
-          console.log('Ready to close');
           if (onClose) onClose();
         });
 
-        api.addEventListener('errorOccurred', (error) => {
-          console.error('Jitsi error:', error);
+        api.addEventListener('errorOccurred', () => {
           setError('An error occurred during the video call');
         });
 
-      } catch (err) {
-        console.error('Failed to load Jitsi:', err);
+      } catch {
         setError('Failed to load video call. Please try again.');
         setIsLoading(false);
       }

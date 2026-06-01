@@ -32,17 +32,11 @@ export const createConversation = async (req, res) => {
     }).populate('sender receiver', 'firstName lastName avatar');
 
     if (existingMessage) {
-      console.log('Found existing conversation:', conversationId);
-      console.log('Existing message sender:', existingMessage.sender);
-      console.log('Existing message receiver:', existingMessage.receiver);
-      
       // Make sure sender and receiver are populated
       if (!existingMessage.sender || !existingMessage.receiver) {
-        console.log('Sender or receiver not populated, deleting and recreating...');
         await Message.deleteOne({ _id: existingMessage._id });
         existingMessage = null;
       } else {
-        // Return existing conversation
         const otherUser = existingMessage.sender._id.toString() === userId.toString()
           ? existingMessage.receiver
           : existingMessage.sender;
@@ -60,11 +54,7 @@ export const createConversation = async (req, res) => {
       }
     }
 
-    // Create a placeholder conversation by creating an initial system message
-    console.log('Creating new system message for conversation:', conversationId);
-    console.log('Sender:', userId);
-    console.log('Receiver:', participantId);
-    
+    // Create a placeholder conversation
     const systemMessage = await Message.create({
       conversation: conversationId,
       sender: userId,
@@ -73,12 +63,6 @@ export const createConversation = async (req, res) => {
       messageType: 'system',
       isRead: true
     });
-
-    console.log('System message created:', systemMessage._id);
-    console.log('Verifying message was saved...');
-    
-    const savedMessage = await Message.findById(systemMessage._id);
-    console.log('Message found in DB:', !!savedMessage);
 
     await systemMessage.populate('sender receiver', 'firstName lastName avatar');
 
@@ -108,7 +92,6 @@ export const createConversation = async (req, res) => {
 export const getConversations = async (req, res) => {
   try {
     const userId = req.user._id;
-    console.log('Getting conversations for user:', userId);
 
     // Get all unique conversations
     const conversations = await Message.aggregate([
@@ -141,8 +124,6 @@ export const getConversations = async (req, res) => {
       }
     ]);
 
-    console.log('Aggregation returned', conversations.length, 'conversations');
-
     // Populate user details for each conversation
     for (const conv of conversations) {
       if (conv.lastMessage) {
@@ -151,19 +132,10 @@ export const getConversations = async (req, res) => {
       }
     }
 
-    console.log('After populate:', conversations.length);
-    conversations.forEach((conv, i) => {
-      console.log(`Conv ${i}:`, {
-        id: conv._id,
-        hasSender: !!conv.lastMessage?.sender,
-        hasReceiver: !!conv.lastMessage?.receiver
-      });
-    });
-
-    // Format conversations and filter out self-conversations
+    // Format conversations — filter out broken or self-conversations
     const formattedConversations = conversations
       .filter(conv => conv.lastMessage && conv.lastMessage.sender && conv.lastMessage.receiver)
-      .filter(conv => conv.lastMessage.sender._id.toString() !== conv.lastMessage.receiver._id.toString()) // Filter self-conversations
+      .filter(conv => conv.lastMessage.sender._id.toString() !== conv.lastMessage.receiver._id.toString())
       .map(conv => {
         const otherUser = conv.lastMessage.sender._id.toString() === userId.toString()
           ? conv.lastMessage.receiver
@@ -177,15 +149,11 @@ export const getConversations = async (req, res) => {
         };
       });
 
-    console.log('Formatted conversations:', formattedConversations.length);
-
     res.status(200).json({
       success: true,
       data: { conversations: formattedConversations }
     });
   } catch (error) {
-    console.error('❌ Error in getConversations:', error);
-    console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to get conversations'
@@ -294,8 +262,9 @@ export const sendMessage = async (req, res) => {
     await message.populate('receiver', 'firstName lastName avatar');
 
     // Emit socket event
-    if (global.io) {
-      global.io.emitToUser(receiverId, 'message:receive', message);
+    const io = req.app.get('io');
+    if (io) {
+      io.emitToUser(receiverId, 'message:receive', message);
     }
 
     res.status(201).json({

@@ -1,7 +1,9 @@
 import Tutor from '../models/Tutor.js';
 import User from '../models/User.js';
 import Subject from '../models/Subject.js';
-import { uploadToCloudinary, deleteFromCloudinary } from '../config/cloudinary.js';
+import Booking from '../models/Booking.js';
+import Review from '../models/Review.js';
+import { uploadToCloudinary } from '../config/cloudinary.js';
 
 // @desc    Apply as tutor
 // @route   POST /api/v1/tutors/apply
@@ -98,7 +100,6 @@ export const applyAsTutor = async (req, res) => {
       data: { tutor }
     });
   } catch (error) {
-    console.error('Tutor application error:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to submit tutor application'
@@ -367,36 +368,20 @@ export const uploadVerificationDocuments = async (req, res) => {
 export const getTutorStats = async (req, res) => {
   try {
     const tutor = await Tutor.findOne({ user: req.user._id });
+    if (!tutor) return res.status(404).json({ success: false, message: 'Tutor profile not found' });
 
-    if (!tutor) {
-      return res.status(404).json({
-        success: false,
-        message: 'Tutor profile not found'
-      });
-    }
-
-    const Booking = (await import('../models/Booking.js')).default;
-    const Review = (await import('../models/Review.js')).default;
-
-    // Get booking stats
+    // Static imports used — no dynamic import overhead
     const bookingStats = await Booking.aggregate([
       { $match: { tutor: tutor._id } },
-      {
-        $group: {
-          _id: '$status',
-          count: { $sum: 1 }
-        }
-      }
+      { $group: { _id: '$status', count: { $sum: 1 } } }
     ]);
 
-    // Get recent bookings
     const recentBookings = await Booking.find({ tutor: tutor._id })
       .populate('student', 'firstName lastName avatar')
       .populate('subject', 'name')
       .sort({ createdAt: -1 })
       .limit(5);
 
-    // Get reviews
     const reviews = await Review.find({ tutor: tutor._id })
       .populate('student', 'firstName lastName avatar')
       .sort({ createdAt: -1 })
@@ -417,9 +402,6 @@ export const getTutorStats = async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to get tutor stats'
-    });
+    res.status(500).json({ success: false, message: error.message || 'Failed to get tutor stats' });
   }
 };

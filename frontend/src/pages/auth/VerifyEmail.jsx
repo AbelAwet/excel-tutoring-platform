@@ -24,10 +24,8 @@ const VerifyEmail = () => {
       else navigate('/student');
     },
     onError: (error) => {
-      console.error('Verification error:', error.response?.data);
       const message = error.response?.data?.message || 'Verification failed';
       const errors = error.response?.data?.errors;
-      
       if (errors && errors.length > 0) {
         toast.error(`${message}: ${errors[0].message}`);
       } else {

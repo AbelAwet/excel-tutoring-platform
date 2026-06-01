@@ -52,10 +52,8 @@ subjectSchema.pre('save', function(next) {
   next();
 });
 
-// Index
-subjectSchema.index({ name: 1 });
+// name and slug unique indexes already created by unique:true on fields above
 subjectSchema.index({ category: 1 });
-subjectSchema.index({ slug: 1 });
 
 const Subject = mongoose.model('Subject', subjectSchema);
 

@@ -62,7 +62,6 @@ const StudentProfile = () => {
       });
     },
     onError: (error) => {
-      console.error('Profile update error:', error);
       toast.error(error.response?.data?.message || 'Failed to update profile');
     },
   });
@@ -83,8 +82,6 @@ const StudentProfile = () => {
       }, 500);
     },
     onError: (error) => {
-      console.error('Avatar upload error:', error);
-      // Revert the preview on error
       updateUser({ avatar: profileData?.data?.user?.avatar || user?.avatar });
       toast.error(error.response?.data?.message || 'Failed to upload avatar');
       setAvatarFile(null);

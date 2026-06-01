@@ -11,39 +11,41 @@ export const createBooking = async (req, res) => {
   try {
     const { tutorId, subjectId, sessionDate, startTime, endTime, duration, notes } = req.body;
 
-    // Find tutor
     const tutor = await Tutor.findById(tutorId).populate('user');
     if (!tutor) {
-      return res.status(404).json({
-        success: false,
-        message: 'Tutor not found'
-      });
+      return res.status(404).json({ success: false, message: 'Tutor not found' });
     }
 
-    // Check if tutor is verified
     if (tutor.verificationStatus !== 'verified') {
-      return res.status(400).json({
-        success: false,
-        message: 'Tutor is not verified yet'
-      });
+      return res.status(400).json({ success: false, message: 'Tutor is not verified yet' });
     }
 
-    // Find subject and price
     const tutorSubject = tutor.subjects.find(
-      s => s.subject.toString() === subjectId
+      (s) => s.subject.toString() === subjectId
     );
-
     if (!tutorSubject) {
-      return res.status(400).json({
-        success: false,
-        message: 'Tutor does not teach this subject'
-      });
+      return res.status(400).json({ success: false, message: 'Tutor does not teach this subject' });
     }
 
-    // Calculate total amount
+    // duration is in minutes; totalAmount = (duration / 60) * pricePerHour
     const totalAmount = (duration / 60) * tutorSubject.pricePerHour;
 
-    // Create booking
+    // Check for double-booking on the same date/time slot
+    const conflict = await Booking.findOne({
+      tutor: tutorId,
+      sessionDate: new Date(sessionDate),
+      status: { $in: ['pending', 'confirmed'] },
+      $or: [
+        { startTime: { $lt: endTime }, endTime: { $gt: startTime } }
+      ]
+    });
+    if (conflict) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tutor already has a booking in this time slot'
+      });
+    }
+
     const booking = await Booking.create({
       student: req.user._id,
       tutor: tutorId,
@@ -58,34 +60,21 @@ export const createBooking = async (req, res) => {
       status: 'pending'
     });
 
-    // Populate booking
     await booking.populate([
       { path: 'student', select: 'firstName lastName email avatar' },
       { path: 'tutor' },
       { path: 'subject', select: 'name' }
     ]);
 
-    // Send notification to tutor
-    await sendBookingNotification(
-      tutor.user._id,
-      req.user._id,
-      'booking_request',
-      {
-        subject: booking.subject.name,
-        bookingId: booking._id
-      }
-    );
+    await sendBookingNotification(tutor.user._id, req.user._id, 'booking_request', {
+      subject: booking.subject.name,
+      bookingId: booking._id
+    });
 
-    // Create initial conversation message
+    // Create initial conversation message if none exists
     try {
       const conversationId = Message.getConversationId(req.user._id, tutor.user._id);
-      
-      // Check if conversation already exists
-      const existingMessage = await Message.findOne({
-        conversation: conversationId
-      });
-
-      // If no conversation exists, create a welcome message
+      const existingMessage = await Message.findOne({ conversation: conversationId });
       if (!existingMessage) {
         await Message.create({
           conversation: conversationId,
@@ -95,14 +84,13 @@ export const createBooking = async (req, res) => {
           messageType: 'text'
         });
       }
-    } catch (error) {
-      console.error('Failed to create initial conversation:', error);
-      // Don't fail the booking if conversation creation fails
+    } catch (err) {
+      // Non-fatal
     }
 
-    // Emit socket event
-    if (global.io) {
-      global.io.emitToUser(tutor.user._id, 'booking:new', booking);
+    const io = req.app.get('io');
+    if (io) {
+      io.emitToUser(tutor.user._id.toString(), 'booking:new', booking);
     }
 
     res.status(201).json({
@@ -111,10 +99,7 @@ export const createBooking = async (req, res) => {
       data: { booking }
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to create booking'
-    });
+    res.status(500).json({ success: false, message: error.message || 'Failed to create booking' });
   }
 };
 
@@ -127,21 +112,13 @@ export const getUserBookings = async (req, res) => {
     const skip = (page - 1) * limit;
 
     const query = {};
-    
-    // Filter by role
     if (req.user.role === 'student') {
       query.student = req.user._id;
     } else if (req.user.role === 'tutor') {
       const tutor = await Tutor.findOne({ user: req.user._id });
-      if (tutor) {
-        query.tutor = tutor._id;
-      }
+      if (tutor) query.tutor = tutor._id;
     }
-
-    // Filter by status
-    if (status) {
-      query.status = status;
-    }
+    if (status) query.status = status;
 
     const bookings = await Booking.find(query)
       .populate('student', 'firstName lastName email avatar')
@@ -167,10 +144,7 @@ export const getUserBookings = async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to get bookings'
-    });
+    res.status(500).json({ success: false, message: error.message || 'Failed to get bookings' });
   }
 };
 
@@ -181,46 +155,29 @@ export const getBookingById = async (req, res) => {
   try {
     const booking = await Booking.findById(req.params.id)
       .populate('student', 'firstName lastName email avatar phone')
-      .populate({
-        path: 'tutor',
-        populate: { path: 'user', select: 'firstName lastName email avatar phone' }
-      })
+      .populate({ path: 'tutor', populate: { path: 'user', select: 'firstName lastName email avatar phone' } })
       .populate('subject', 'name description')
       .populate('payment');
 
     if (!booking) {
-      return res.status(404).json({
-        success: false,
-        message: 'Booking not found'
-      });
+      return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
-    // Check authorization
     const isStudent = booking.student._id.toString() === req.user._id.toString();
-    const tutor = await Tutor.findOne({ _id: booking.tutor._id, user: req.user._id });
-    const isTutor = !!tutor;
+    const tutorDoc = await Tutor.findOne({ _id: booking.tutor._id, user: req.user._id });
     const isAdmin = req.user.role === 'admin';
 
-    if (!isStudent && !isTutor && !isAdmin) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to view this booking'
-      });
+    if (!isStudent && !tutorDoc && !isAdmin) {
+      return res.status(403).json({ success: false, message: 'Not authorized to view this booking' });
     }
 
-    res.status(200).json({
-      success: true,
-      data: { booking }
-    });
+    res.status(200).json({ success: true, data: { booking } });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to get booking'
-    });
+    res.status(500).json({ success: false, message: error.message || 'Failed to get booking' });
   }
 };
 
-// @desc    Confirm booking (Tutor)
+// @desc    Confirm booking (Tutor) — requires payment to be approved first
 // @route   PUT /api/v1/bookings/:id/confirm
 // @access  Private (Tutor)
 export const confirmBooking = async (req, res) => {
@@ -230,48 +187,35 @@ export const confirmBooking = async (req, res) => {
       .populate('subject', 'name');
 
     if (!booking) {
-      return res.status(404).json({
-        success: false,
-        message: 'Booking not found'
-      });
+      return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
-    // Check if user is the tutor
     const tutor = await Tutor.findOne({ _id: booking.tutor, user: req.user._id });
     if (!tutor) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized'
-      });
+      return res.status(403).json({ success: false, message: 'Not authorized' });
     }
 
-    // Check if booking is pending
     if (booking.status !== 'pending') {
+      return res.status(400).json({ success: false, message: 'Only pending bookings can be confirmed' });
+    }
+
+    // Enforce payment before confirmation
+    if (booking.paymentStatus !== 'paid') {
       return res.status(400).json({
         success: false,
-        message: 'Only pending bookings can be confirmed'
+        message: 'Cannot confirm booking: payment has not been approved yet'
       });
     }
 
-    // For now, allow confirmation without payment (can be changed later)
-    // In production, you would check: if (booking.paymentStatus !== 'paid')
-    
     booking.status = 'confirmed';
     booking.confirmedAt = new Date();
     await booking.save();
 
-    // Send notification to student
-    await sendBookingNotification(
-      booking.student._id,
-      req.user._id,
-      'booking_confirmed',
-      {
-        subject: booking.subject.name,
-        bookingId: booking._id
-      }
-    );
+    await sendBookingNotification(booking.student._id, req.user._id, 'booking_confirmed', {
+      subject: booking.subject.name,
+      bookingId: booking._id
+    });
 
-    // Send confirmation email
     try {
       await sendBookingConfirmationEmail(booking.student.email, {
         studentName: booking.student.firstName,
@@ -283,24 +227,17 @@ export const confirmBooking = async (req, res) => {
         amount: booking.totalAmount
       });
     } catch (emailError) {
-      console.error('Failed to send confirmation email:', emailError);
+      // Non-fatal
     }
 
-    // Emit socket event
-    if (global.io) {
-      global.io.emitToUser(booking.student._id, 'booking:confirmed', booking);
+    const io = req.app.get('io');
+    if (io) {
+      io.emitToUser(booking.student._id.toString(), 'booking:confirmed', booking);
     }
 
-    res.status(200).json({
-      success: true,
-      message: 'Booking confirmed successfully',
-      data: { booking }
-    });
+    res.status(200).json({ success: true, message: 'Booking confirmed successfully', data: { booking } });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to confirm booking'
-    });
+    res.status(500).json({ success: false, message: error.message || 'Failed to confirm booking' });
   }
 };
 
@@ -310,29 +247,19 @@ export const confirmBooking = async (req, res) => {
 export const rejectBooking = async (req, res) => {
   try {
     const { reason } = req.body;
-    const booking = await Booking.findById(req.params.id);
+    const booking = await Booking.findById(req.params.id).populate('subject', 'name');
 
     if (!booking) {
-      return res.status(404).json({
-        success: false,
-        message: 'Booking not found'
-      });
+      return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
-    // Check if user is the tutor
     const tutor = await Tutor.findOne({ _id: booking.tutor, user: req.user._id });
     if (!tutor) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized'
-      });
+      return res.status(403).json({ success: false, message: 'Not authorized' });
     }
 
     if (booking.status !== 'pending') {
-      return res.status(400).json({
-        success: false,
-        message: 'Only pending bookings can be rejected'
-      });
+      return res.status(400).json({ success: false, message: 'Only pending bookings can be rejected' });
     }
 
     booking.status = 'rejected';
@@ -340,27 +267,14 @@ export const rejectBooking = async (req, res) => {
     booking.rejectionReason = reason;
     await booking.save();
 
-    // Send notification
-    await sendBookingNotification(
-      booking.student,
-      req.user._id,
-      'booking_cancelled',
-      {
-        subject: booking.subject.name,
-        bookingId: booking._id
-      }
-    );
+    await sendBookingNotification(booking.student, req.user._id, 'booking_cancelled', {
+      subject: booking.subject?.name || '',
+      bookingId: booking._id
+    });
 
-    res.status(200).json({
-      success: true,
-      message: 'Booking rejected',
-      data: { booking }
-    });
+    res.status(200).json({ success: true, message: 'Booking rejected', data: { booking } });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to reject booking'
-    });
+    res.status(500).json({ success: false, message: error.message || 'Failed to reject booking' });
   }
 };
 
@@ -370,32 +284,21 @@ export const rejectBooking = async (req, res) => {
 export const cancelBooking = async (req, res) => {
   try {
     const { reason } = req.body;
-    const booking = await Booking.findById(req.params.id);
+    const booking = await Booking.findById(req.params.id).populate('subject', 'name');
 
     if (!booking) {
-      return res.status(404).json({
-        success: false,
-        message: 'Booking not found'
-      });
+      return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
-    // Check authorization
     const isStudent = booking.student.toString() === req.user._id.toString();
-    const tutor = await Tutor.findOne({ _id: booking.tutor, user: req.user._id });
-    const isTutor = !!tutor;
+    const tutorDoc = await Tutor.findOne({ _id: booking.tutor, user: req.user._id });
 
-    if (!isStudent && !isTutor) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized'
-      });
+    if (!isStudent && !tutorDoc) {
+      return res.status(403).json({ success: false, message: 'Not authorized' });
     }
 
     if (booking.status === 'completed' || booking.status === 'cancelled') {
-      return res.status(400).json({
-        success: false,
-        message: 'Cannot cancel this booking'
-      });
+      return res.status(400).json({ success: false, message: 'Cannot cancel this booking' });
     }
 
     booking.status = 'cancelled';
@@ -404,89 +307,64 @@ export const cancelBooking = async (req, res) => {
     booking.cancellationReason = reason;
     await booking.save();
 
-    // Notify the other party
-    const recipientId = isStudent ? booking.tutor : booking.student;
-    await sendBookingNotification(
-      recipientId,
-      req.user._id,
-      'booking_cancelled',
-      {
-        subject: booking.subject.name,
-        bookingId: booking._id
+    // Notify the other party — must use User IDs, not Tutor IDs
+    if (isStudent) {
+      // Student cancelled — notify tutor's user account
+      const tutorDoc = await Tutor.findById(booking.tutor).select('user');
+      if (tutorDoc) {
+        await sendBookingNotification(tutorDoc.user, req.user._id, 'booking_cancelled', {
+          subject: booking.subject?.name || '',
+          bookingId: booking._id
+        });
       }
-    );
+    } else {
+      // Tutor cancelled — notify student directly
+      await sendBookingNotification(booking.student, req.user._id, 'booking_cancelled', {
+        subject: booking.subject?.name || '',
+        bookingId: booking._id
+      });
+    }
 
-    res.status(200).json({
-      success: true,
-      message: 'Booking cancelled successfully',
-      data: { booking }
-    });
+    res.status(200).json({ success: true, message: 'Booking cancelled successfully', data: { booking } });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to cancel booking'
-    });
+    res.status(500).json({ success: false, message: error.message || 'Failed to cancel booking' });
   }
 };
 
-// @desc    Complete booking
+// @desc    Complete booking (Tutor)
 // @route   PUT /api/v1/bookings/:id/complete
 // @access  Private (Tutor)
 export const completeBooking = async (req, res) => {
   try {
-    const booking = await Booking.findById(req.params.id);
+    const booking = await Booking.findById(req.params.id).populate('subject', 'name');
 
     if (!booking) {
-      return res.status(404).json({
-        success: false,
-        message: 'Booking not found'
-      });
+      return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
-    // Check if user is the tutor
     const tutor = await Tutor.findOne({ _id: booking.tutor, user: req.user._id });
     if (!tutor) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized'
-      });
+      return res.status(403).json({ success: false, message: 'Not authorized' });
     }
 
     if (booking.status !== 'confirmed') {
-      return res.status(400).json({
-        success: false,
-        message: 'Only confirmed bookings can be completed'
-      });
+      return res.status(400).json({ success: false, message: 'Only confirmed bookings can be completed' });
     }
 
     booking.status = 'completed';
     booking.completedAt = new Date();
     await booking.save();
 
-    // Update tutor stats
     tutor.totalSessions += 1;
     await tutor.save();
 
-    // Send notification
-    await sendBookingNotification(
-      booking.student,
-      req.user._id,
-      'booking_completed',
-      {
-        subject: booking.subject.name,
-        bookingId: booking._id
-      }
-    );
+    await sendBookingNotification(booking.student, req.user._id, 'booking_completed', {
+      subject: booking.subject?.name || '',
+      bookingId: booking._id
+    });
 
-    res.status(200).json({
-      success: true,
-      message: 'Booking completed successfully',
-      data: { booking }
-    });
+    res.status(200).json({ success: true, message: 'Booking completed successfully', data: { booking } });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to complete booking'
-    });
+    res.status(500).json({ success: false, message: error.message || 'Failed to complete booking' });
   }
 };

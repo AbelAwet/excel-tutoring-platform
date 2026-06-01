@@ -55,12 +55,12 @@ export const sendBookingNotification = async (recipientId, senderId, type, booki
 export const sendPaymentNotification = async (recipientId, type, paymentData) => {
   const notificationMessages = {
     payment_received: {
-      title: 'Payment Received',
-      message: `Payment of ${paymentData.amount} ETB received successfully`
+      title: 'Payment Approved',
+      message: `Your payment of ${paymentData.amount} ETB has been approved`
     },
     payment_failed: {
-      title: 'Payment Failed',
-      message: `Payment of ${paymentData.amount} ETB failed. Please try again`
+      title: 'Payment Rejected',
+      message: `Your payment of ${paymentData.amount} ETB was rejected${paymentData.reason ? ': ' + paymentData.reason : '. Please resubmit.'}`
     }
   };
 

@@ -43,59 +43,33 @@ const StudentMessages = () => {
 
   // Handle navigation from tutor profile
   useEffect(() => {
-    console.log('=== Messages Page Effect ===');
-    console.log('location.state:', location.state);
-    console.log('conversations count:', conversations.length);
-    console.log('conversations:', conversations);
-    
     const selectConversation = async () => {
-      // If coming from tutor list, refetch first
       if (location.state?.fromTutorList && !selectedConversation) {
-        console.log('Navigated from tutor list, refetching conversations...');
         await refetchConversations();
-        console.log('Conversations refetched, will try to select on next render');
         return;
       }
       
       if (location.state?.conversationId || location.state?.tutorId) {
-        // Try to find by conversationId first
         let targetConversation = conversations.find(
           conv => conv.conversationId === location.state.conversationId
         );
-        
-        // If not found, try to find by tutorId
         if (!targetConversation && location.state?.tutorId) {
           targetConversation = conversations.find(
             conv => conv.otherUser?._id === location.state.tutorId
           );
         }
-        
-        console.log('Target conversation found:', targetConversation);
-        
         if (targetConversation) {
-          console.log('Setting selected conversation:', targetConversation);
           setSelectedConversation(targetConversation);
-          // Clear the state to prevent re-selection
           window.history.replaceState({}, document.title);
-        } else if (conversations.length > 0) {
-          console.log('Conversation not found in list, but we have conversations');
         }
       }
     };
-    
     selectConversation();
   }, [conversations, location.state, refetchConversations, selectedConversation]);
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
-    if (!newMessage.trim() || !selectedConversation || !selectedConversation.otherUser) {
-      console.error('Cannot send message - missing data:', { 
-        hasMessage: !!newMessage.trim(), 
-        hasConversation: !!selectedConversation,
-        hasOtherUser: !!selectedConversation?.otherUser 
-      });
-      return;
-    }
+    if (!newMessage.trim() || !selectedConversation || !selectedConversation.otherUser) return;
 
     try {
       await messageService.sendMessage({
@@ -109,8 +83,7 @@ const StudentMessages = () => {
       queryClient.invalidateQueries(['conversations']);
       
       toast.success('Message sent successfully');
-    } catch (error) {
-      console.error('Failed to send message:', error);
+    } catch {
       toast.error('Failed to send message');
     }
   };
@@ -155,11 +128,10 @@ const StudentMessages = () => {
             </h2>
             <button
               onClick={() => {
-                console.log('Manual refresh clicked');
                 refetchConversations();
                 toast.success('Refreshing conversations...');
               }}
-              className="text-sm px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+              className="text-sm px-3 py-1 bg-[#3b82f6] text-white rounded hover:bg-[#2563eb] transition-colors"
             >
               Refresh
             </button>

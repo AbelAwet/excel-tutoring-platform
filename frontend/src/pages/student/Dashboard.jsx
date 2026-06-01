@@ -6,7 +6,6 @@ import {
 } from 'react-icons/fi';
 import { bookingService } from '../../services/bookingService';
 import { format } from 'date-fns';
-import AnimatedContainer from '../../components/AnimatedContainer';
 
 const StatCard = ({ title, value, icon: Icon, color = 'primary' }) => {
   const colorClasses = {
@@ -18,21 +17,17 @@ const StatCard = ({ title, value, icon: Icon, color = 'primary' }) => {
   };
 
   return (
-    <AnimatedContainer animation="scale-in" delay={0.1}>
-      <div className="card-gradient hover-lift transition-all-smooth">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-gray-600 dark:text-gray-400 font-medium">{title}</p>
-            <p className="text-4xl font-bold gradient-text mt-2">
-              {value}
-            </p>
-          </div>
-          <div className={`p-4 rounded-xl shadow-lg ${colorClasses[color]}`}>
-            <Icon size={32} />
-          </div>
+    <div className="card-gradient hover-lift transition-all-smooth">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm text-gray-600 dark:text-gray-400 font-medium">{title}</p>
+          <p className="text-4xl font-bold gradient-text mt-2">{value}</p>
+        </div>
+        <div className={`p-4 rounded-xl shadow-lg ${colorClasses[color]}`}>
+          <Icon size={32} />
         </div>
       </div>
-    </AnimatedContainer>
+    </div>
   );
 };
 

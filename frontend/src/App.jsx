@@ -17,10 +17,8 @@ import VerifyEmail from './pages/auth/VerifyEmail';
 
 // Common Pages
 import TutorList from './pages/tutors/TutorList';
-import TutorListSimple from './pages/tutors/TutorListSimple';
-import TutorListDebug from './pages/tutors/TutorListDebug';
-import TutorProfile from './pages/tutors/TutorProfile'; // Public tutor profile
-import VideoSession from './pages/VideoSession'; // Video call page
+import TutorProfile from './pages/tutors/TutorProfile';
+import VideoSession from './pages/VideoSession';
 
 // Student Dashboard
 import StudentDashboard from './pages/student/Dashboard';
@@ -86,7 +84,7 @@ function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password/:resettoken" element={<ResetPassword />} />
-        <Route path="/tutors" element={<TutorListSimple />} />
+        <Route path="/tutors" element={<TutorList />} />
         <Route path="/tutors/:id" element={<TutorProfile />} />
       </Route>
 

@@ -1,15 +1,20 @@
 import mongoose from 'mongoose';
+import dns from 'dns';
+
+// Use Google DNS to resolve Atlas SRV records reliably
+dns.setDefaultResultOrder('ipv4first');
+dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
 
 const connectDB = async () => {
   try {
     const conn = await mongoose.connect(process.env.MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
+      serverSelectionTimeoutMS: 10000, // 10s timeout
+      socketTimeoutMS: 45000,
+      family: 4 // Force IPv4 — fixes some DNS SRV issues on Windows
     });
 
     console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
 
-    // Handle connection events
     mongoose.connection.on('error', (err) => {
       console.error('❌ MongoDB connection error:', err);
     });
@@ -18,10 +23,9 @@ const connectDB = async () => {
       console.warn('⚠️  MongoDB disconnected');
     });
 
-    // Graceful shutdown
     process.on('SIGINT', async () => {
       await mongoose.connection.close();
-      console.log('MongoDB connection closed through app termination');
+      console.log('MongoDB connection closed');
       process.exit(0);
     });
 

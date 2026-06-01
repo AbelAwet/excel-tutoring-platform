@@ -55,26 +55,18 @@ const ResetPassword = () => {
     setIsLoading(true);
     
     try {
-      console.log('Sending password reset request with token:', token);
-      
       const response = await api.put(`/auth/reset-password/${token}`, {
         password: formData.password
       });
       
-      console.log('Password reset response:', response.data);
-      
       if (response.data.success) {
         setIsSuccess(true);
         toast.success('Password reset successful!');
-        setTimeout(() => {
-          navigate('/login');
-        }, 3000);
+        setTimeout(() => navigate('/login'), 3000);
       } else {
         toast.error(response.data.message || 'Failed to reset password');
       }
     } catch (error) {
-      console.error('Password reset error:', error);
-      console.error('Error response:', error.response?.data);
       toast.error(error.response?.data?.message || 'Failed to reset password');
     } finally {
       setIsLoading(false);

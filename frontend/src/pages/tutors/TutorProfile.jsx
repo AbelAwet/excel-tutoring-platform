@@ -41,8 +41,6 @@ const TutorProfile = () => {
       // Automatically create conversation after booking
       try {
         await messageService.createConversation(tutor.user._id);
-        
-        // Show success message with option to go to messages
         toast.success(
           <div>
             <p>Session booked! You can now message your tutor.</p>
@@ -55,8 +53,8 @@ const TutorProfile = () => {
           </div>,
           { duration: 5000 }
         );
-      } catch (error) {
-        console.error('Failed to create conversation:', error);
+      } catch {
+        // Non-fatal — booking succeeded, conversation creation is best-effort
       }
     },
     onError: (error) => {
@@ -125,8 +123,7 @@ const TutorProfile = () => {
         });
         toast.success('Opening conversation...');
       }
-    } catch (error) {
-      console.error('Error creating conversation:', error);
+    } catch {
       toast.error('Failed to start conversation');
     }
   };
